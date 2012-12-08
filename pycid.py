@@ -2,70 +2,37 @@ import sys
 import os
 import re
 import argparse
-import pyinotify
 import gntp.notifier
 import phonenumbers
 import gdata.contacts.data
 import gdata.contacts.client
+import time
 
-class PTmp(pyinotify.ProcessEvent):
-  def __init__(self, file_path, debug, growl, contacts):
-    self.file_path = file_path
-    self.file_handle = open(self.file_path, 'r')
-    self.file_handle.seek(0, 2)
-    self.debug = debug
-    self.growl = growl
-    self.contacts = contacts
-
-  def process_IN_MODIFY(self, event):
-    if self.file_path not in os.path.join(event.path, event.name):
-      return
-    else:
-      self.process_line(self.file_handle.readline().rstrip())
-
-  def process_IN_MOVE_SELF(self, event):
-    if self.debug:
-      print 'The file moved! Continuing to read from that until a new one is created.'
-
-  def process_IN_CREATE(self, event):
-    if self.file_path in os.path.join(event.path, event.name):
-      self.file_handle.close()
-      self.file_handle = open(self.file_path, 'r')
-      if self.debug:
-        print 'New file was created; catching up with lines.'
-      for line in self.file_handle.readlines():
-        self.process_line(line.rstrip())
-      self.file_handle.seek(0, 2)
-    return
-
-  def close(self):
-    self.file_handle.close()
-
-  def process_line(self, line):
-    if 'INVITE sip' in line:
-      result = re.search(r'From: "(.*)"', line)
-      if result:
-        number = result.group(1)
-        detail = ''
-        image = None
-        if number in self.contacts:
-          contact = self.contacts[number]
-          detail = contact['name'] + ' ' + contact['number']
-          image = contact['photo']
-        else:
-          phone_number = phonenumbers.parse(number, 'US')
-          formatted_number = phonenumbers.format_number(phone_number, phonenumbers.PhoneNumberFormat.NATIONAL)
-          detail = 'Unknown ' + formatted_number
-        print 'incoming call from: ' + detail
-        self.growl.notify(
-          noteType = 'Incoming Call',
-          title = 'You have an incoming call',
-          description = detail,
-          sticky = False,
-          priority = 1,
-          icon = image
-        )
-#    print line
+def process_line(line, contacts, growl):
+  if 'INVITE sip' in line:
+    result = re.search(r'From: "(.*)"', line)
+    if result:
+      number = result.group(1)
+      detail = ''
+      image = None
+      if number in contacts:
+        contact = contacts[number]
+        detail = contact['name'] + ' ' + contact['number']
+        image = contact['photo']
+      else:
+        phone_number = phonenumbers.parse(number, 'US')
+        formatted_number = phonenumbers.format_number(phone_number, phonenumbers.PhoneNumberFormat.NATIONAL)
+        detail = 'Unknown ' + formatted_number
+      print 'incoming call from: ' + detail
+      growl.notify(
+        noteType = 'Incoming Call',
+        title = 'You have an incoming call',
+        description = detail,
+        sticky = False,
+        priority = 1,
+        icon = image
+      )
+#  print line
 
 def get_contacts(verbose, email, password):
   contacts = {}
@@ -98,6 +65,15 @@ def get_contacts(verbose, email, password):
 
   return contacts
 
+def follow(file_handle):
+  file_handle.seek(0,2)
+  while True:
+    line = file_handle.readline()
+    if not line:
+      time.sleep(0.1)
+      continue
+    yield line
+
 def main():
   parser = argparse.ArgumentParser()
   parser.add_argument('logfile', help = 'the pap2t log file to watch')
@@ -123,31 +99,14 @@ def main():
   if args.verbose:
     print 'Watching ' + args.logfile
 
-  wm = pyinotify.WatchManager()
-  dirmask = pyinotify.IN_MODIFY | pyinotify.IN_DELETE | pyinotify.IN_MOVE_SELF | pyinotify.IN_CREATE
+  file_handle = open(args.logfile, 'r')
 
-  pt = PTmp(args.logfile, args.verbose, growl, contacts)
-
-  notifier = pyinotify.Notifier(wm, pt)
-
-  index = args.logfile.rfind('/')
-  wm.add_watch(args.logfile[:index], dirmask)
-
-  while True:
-    try:
-      notifier.process_events()
-      if notifier.check_events():
-        notifier.read_events()
-    except KeyboardInterrupt:
-      print ''
-      break
-
-  notifier.stop()
-  pt.close()
-
-  sys.exit(0)
-
-
+  try:
+    loglines = follow(file_handle)
+    for line in loglines:
+      process_line(line, contacts, growl)
+  except KeyboardInterrupt:
+    print ''
 
 if __name__ == '__main__':
   main()
