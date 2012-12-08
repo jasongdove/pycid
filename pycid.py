@@ -1,12 +1,18 @@
-import sys, os, pyinotify, re
+import sys
+import os
+import re
 import argparse
+import pyinotify
+import gntp.notifier
+import phonenumbers
 
 class PTmp(pyinotify.ProcessEvent):
-  def __init__(self, file_path, debug):
+  def __init__(self, file_path, debug, growl):
     self.file_path = file_path
     self.file_handle = open(self.file_path, 'r')
     self.file_handle.seek(0, 2)
     self.debug = debug
+    self.growl = growl
 
   def process_IN_MODIFY(self, event):
     if self.file_path not in os.path.join(event.path, event.name):
@@ -37,24 +43,44 @@ class PTmp(pyinotify.ProcessEvent):
       result = re.search(r'From: "(.*)"', line)
       if result:
         number = result.group(1)
-        print 'incoming call from: ' + number
+        phone_number = phonenumbers.parse(number, 'US')
+        formatted_number = phonenumbers.format_number(phone_number, phonenumbers.PhoneNumberFormat.NATIONAL)
+        print 'incoming call from: ' + formatted_number
+        self.growl.notify(
+          noteType = 'Incoming Call',
+          title = 'You have an incoming call',
+          description = 'From ' + formatted_number,
+          sticky = False,
+          priority = 1
+        )
 #    print line
       
 
 def main():
   parser = argparse.ArgumentParser()
   parser.add_argument('logfile', help = 'the pap2t log file to watch')
-  parser.add_argument('-v', '--verbose', help = 'increase output verbosity', dest = 'verbose', action='store_true')
+  parser.add_argument('growl_hostname', help = 'hostname that will receive growl notifications', type = str)
+  parser.add_argument('-v', '--verbose', help = 'increase output verbosity', dest = 'verbose', action = 'store_true')
   args = parser.parse_args()
+
+  if args.verbose:
+    print 'Registering Growl'
+
+  growl = gntp.notifier.GrowlNotifier(
+    applicationName = 'pycid',
+    notifications = ['Incoming Call'],
+    defaultNotifications = ['Incoming Call'],
+    hostname = args.growl_hostname
+  )
+  growl.register()
 
   if args.verbose:
     print 'Watching ' + args.logfile
 
   wm = pyinotify.WatchManager()
-
   dirmask = pyinotify.IN_MODIFY | pyinotify.IN_DELETE | pyinotify.IN_MOVE_SELF | pyinotify.IN_CREATE
 
-  pt = PTmp(args.logfile, args.verbose)
+  pt = PTmp(args.logfile, args.verbose, growl)
 
   notifier = pyinotify.Notifier(wm, pt)
 
