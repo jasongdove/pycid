@@ -15,13 +15,13 @@ def process_line(line, contacts, growl):
       number = result.group(1)
       detail = ''
       image = None
-      if number in contacts:
-        contact = contacts[number]
+      phone_number = phonenumbers.parse(number, 'US')
+      formatted_number = phonenumbers.format_number(phone_number, phonenumbers.PhoneNumberFormat.NATIONAL)
+      if formatted_number in contacts:
+        contact = contacts[formatted_number]
         detail = contact['name'] + ' ' + contact['number']
         image = contact['photo']
       else:
-        phone_number = phonenumbers.parse(number, 'US')
-        formatted_number = phonenumbers.format_number(phone_number, phonenumbers.PhoneNumberFormat.NATIONAL)
         detail = 'Unknown ' + formatted_number
       print 'incoming call from: ' + detail
       growl.notify(
@@ -57,7 +57,7 @@ def get_contacts(verbose, email, password):
             photo = client.GetPhoto(entry)
           except gdata.client.RequestError:
             pass
-          contacts[unformatted] = dict(name = entry.title.text, number = formatted, photo = photo)
+          contacts[formatted] = dict(name = entry.title.text, number = formatted, photo = photo)
       next = feed.GetNextLink()
       feed = None
       if next:
