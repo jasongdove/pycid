@@ -1,5 +1,5 @@
 import sys, os, pyinotify, re
-from optparse import OptionParser
+import argparse
 
 class PTmp(pyinotify.ProcessEvent):
   def __init__(self, file_path, debug):
@@ -42,28 +42,24 @@ class PTmp(pyinotify.ProcessEvent):
       
 
 def main():
-  parser = OptionParser()
-  parser.add_option('-d', '--debug', help = 'print debug messages', dest = 'debug')
-  (options, args) = parser.parse_args()
+  parser = argparse.ArgumentParser()
+  parser.add_argument('logfile', help = 'the pap2t log file to watch')
+  parser.add_argument('-v', '--verbose', help = 'increase output verbosity', dest = 'verbose', action='store_true')
+  args = parser.parse_args()
 
-  if len(sys.argv) < 2:
-    parser.print_usage()
-    sys.exit(1)
-
-  myfile = args[0]
-  if options.debug:
-    print 'Watching ' + myfile
+  if args.verbose:
+    print 'Watching ' + args.logfile
 
   wm = pyinotify.WatchManager()
 
   dirmask = pyinotify.IN_MODIFY | pyinotify.IN_DELETE | pyinotify.IN_MOVE_SELF | pyinotify.IN_CREATE
 
-  pt = PTmp(myfile, options.debug)
+  pt = PTmp(args.logfile, args.verbose)
 
   notifier = pyinotify.Notifier(wm, pt)
 
-  index = myfile.rfind('/')
-  wm.add_watch(myfile[:index], dirmask)
+  index = args.logfile.rfind('/')
+  wm.add_watch(args.logfile[:index], dirmask)
 
   while True:
     try:
