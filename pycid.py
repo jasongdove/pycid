@@ -6,7 +6,7 @@ from contactscache import ContactsCache
 
 def process_line(line, contacts, growl):
     if 'INVITE sip' in line:
-        result = re.search(r'From: "(.*)"', line)
+        result = re.search(r'From: ".*" <sip:(.*?)@', line)
         if result:
             number = result.group(1)
             detail = ''
