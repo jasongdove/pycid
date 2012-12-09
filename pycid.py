@@ -13,7 +13,7 @@ def process_line(line, contacts, growl):
             image = None
             (name, formatted_number, image) = contacts.find_contact(number)
             detail = name + "\n" + formatted_number
-            print 'incoming call from: ' + detail
+            print 'incoming call from: ' + detail.replace('\n', ' - ')
             growl.notify(
                 noteType = 'Incoming Call',
                 title = 'You have an incoming call',

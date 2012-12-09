@@ -26,28 +26,29 @@ class ContactsCache():
 
     def process_contact(self, entry):
         if entry.title and entry.title.text and entry.phone_number:
-            unformatted = entry.phone_number[0].text
-            phone_number = phonenumbers.parse(unformatted, 'US')
-            formatted = phonenumbers.format_number(
-                phone_number,
-                phonenumbers.PhoneNumberFormat.NATIONAL)
+            normalized = self._normalize_phone_number(entry.phone_number[0].text)
             photo = None
             try:
                 photo = self.client.GetPhoto(entry)
             except gdata.client.RequestError:
                 pass
-            self.contacts[formatted] = dict(
+            self.contacts[normalized] = dict(
                 name = entry.title.text,
-                number = formatted,
+                number = normalized,
                 photo = photo)
     
     def find_contact(self, unformatted):
-        phone_number = phonenumbers.parse(unformatted, 'US')
-        formatted = phonenumbers.format_number(
-            phone_number,
-            phonenumbers.PhoneNumberFormat.NATIONAL)
-        if formatted in self.contacts:
-            contact = self.contacts[formatted]
+        normalized = self._normalize_phone_number(unformatted)
+        if normalized in self.contacts:
+            contact = self.contacts[normalized]
             return (contact['name'], contact['number'], contact['photo'])
         else:
-            return ('Unknown', formatted, None)
+            return ('Unknown', normalized, None)
+
+    def _normalize_phone_number(self, unformatted):
+        phone_number = phonenumbers.parse(unformatted, 'US')
+        formatted = phonenumbers.format_number(
+          phone_number,
+          phonenumbers.PhoneNumberFormat.NATIONAL)
+        return formatted
+
