@@ -82,6 +82,8 @@ class ContactsCache():
                 photo = self.client.GetPhoto(entry)
             except gdata.client.RequestError:
                 pass
+            if photo:
+                photo = sqlite3.Binary(photo)
             name = entry.title.text
             updated = entry.updated.text
             with closing(self.connection.cursor()) as cursor:
@@ -101,6 +103,6 @@ class ContactsCache():
             cursor.execute(sql, [normalized])
             contact = cursor.fetchone()
             if contact:
-                return (contact[0], normalized, contact[1])
+                return (contact[0], normalized, str(contact[1]))
             else:
                 return ('Unknown', normalized, None)
