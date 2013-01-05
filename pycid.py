@@ -1,10 +1,10 @@
 import re
 import argparse
-import gntp.notifier
 import time
 from contactscache import ContactsCache
+from notifier import Notifier
 
-def process_line(line, contacts, growl):
+def process_line(line, contacts, notifier):
     if 'INVITE sip' in line:
         result = re.search(r'From: ".*" <sip:(.*?)@', line)
         if result:
@@ -14,13 +14,7 @@ def process_line(line, contacts, growl):
             (name, formatted_number, image) = contacts.find_contact(number)
             detail = name + "\n" + formatted_number
             print 'incoming call from: ' + detail.replace('\n', ' - ')
-            growl.notify(
-                noteType = 'Incoming Call',
-                title = 'You have an incoming call',
-                description = detail,
-                sticky = False,
-                priority = 1,
-                icon = image)
+            notifier.notify(detail, image)
 #    print line
 
 def follow(file_handle):
@@ -36,9 +30,27 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('logfile', help = 'the pap2t log file to watch')
     parser.add_argument(
-        'growl_hostname',
-        help = 'hostname that will receive growl notifications',
-        type = str)
+        '-n',
+        '--namespace',
+        help = 'Azure Service Bus namespace',
+        type = str,
+        dest = 'service_bus_namespace')
+    parser.add_argument(
+        '-k',
+        '--account-key',
+        help = 'Azure Service Bus account key',
+        type = str,
+        dest = 'service_bus_account_key')
+    parser.add_argument(
+        '-i',
+        '--issuer',
+        help = 'Azure Service bus issuer',
+        dest = 'service_bus_issuer')
+    parser.add_argument(
+        '-t',
+        '--service-bus-topic',
+        help = 'Azure Service Bus topic',
+        dest = 'service_bus_topic')
     parser.add_argument(
         '-u',
         '--username',
@@ -59,15 +71,7 @@ def main():
         action = 'store_true')
     args = parser.parse_args()
 
-    if args.verbose:
-        print 'Registering Growl'
-
-    growl = gntp.notifier.GrowlNotifier(
-        applicationName = 'pycid',
-        notifications = ['Incoming Call'],
-        defaultNotifications = ['Incoming Call'],
-        hostname = args.growl_hostname)
-    growl.register()
+    notifier = Notifier(args)
 
     contacts = ContactsCache(args.username, args.password)
     contacts.refresh()
@@ -80,7 +84,7 @@ def main():
     try:
         loglines = follow(file_handle)
         for line in loglines:
-            process_line(line, contacts, growl)
+            process_line(line, contacts, notifier)
     except KeyboardInterrupt:
         print ''
 
